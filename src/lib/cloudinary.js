@@ -40,6 +40,7 @@ async function createPublicId({ path: filePath } = {}) {
   let hash = crypto.createHash('md5');
 
   const { name: imgName } = path.parse(filePath);
+  const name = imgName.split('?')[0];
 
   if ( !isRemoteUrl(filePath) ) {
     hash.update(filePath);
@@ -51,7 +52,7 @@ async function createPublicId({ path: filePath } = {}) {
 
   hash = hash.digest('hex');
 
-  return `${imgName}-${hash}`
+  return `${name}-${hash}`
 }
 
 module.exports.createPublicId = createPublicId;
@@ -171,14 +172,10 @@ async function updateHtmlImagesToCloudinary(html, options = {}) {
   const errors = [];
   const dom = new JSDOM(html);
 
-  // Loop through all images found in the DOM and swap the source with
-  // a Cloudinary URL
-
   const images = Array.from(dom.window.document.querySelectorAll('img'));
 
-  for ( const $img of images ) {
-    let imgSrc = $img.getAttribute('src');
-
+  await Promise.all(images.map(async ($img) => {
+    const imgSrc = $img.getAttribute('src');
     try {
       const cloudinarySrc = await getCloudinaryUrl({
         deliveryType,
@@ -188,7 +185,6 @@ async function updateHtmlImagesToCloudinary(html, options = {}) {
         uploadPreset,
         remoteHost
       });
-
       $img.setAttribute('src', cloudinarySrc)
     } catch(e) {
       const { error } = e;
@@ -196,10 +192,8 @@ async function updateHtmlImagesToCloudinary(html, options = {}) {
         imgSrc,
         message: e.message || error.message
       });
-      continue;
     }
-
-  }
+  }));
 
   return {
     html: dom.serialize(),
